@@ -21,17 +21,21 @@ data = load_data()
 
 # If data is loaded successfully
 if data is not None:
-    # Create a TF-IDF Vectorizer and fit it to the product descriptions
+    # Combine product name and description into a single column
+    data['combined'] = data['productName'] + ' ' + data['productDesc']
+
+    # Create a TF-IDF Vectorizer and fit it to the combined text
     vectorizer = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform(data['productDesc'])
+    tfidf_matrix = vectorizer.fit_transform(data['combined'])
 
     # Calculate cosine similarity matrix
     cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
 
     # Function to recommend products based on the description
     def recommend_products(description, cosine_sim=cosine_sim):
-        # Transform the user input into the same TF-IDF matrix space
-        input_vec = vectorizer.transform([description])
+        # Combine user input with a placeholder product name
+        input_text = "Query Product " + description
+        input_vec = vectorizer.transform([input_text])
         sim_scores = linear_kernel(input_vec, tfidf_matrix).flatten()
 
         # Get indices of the most similar products
