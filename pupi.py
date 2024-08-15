@@ -40,16 +40,16 @@ if data is not None:
         for idx in sim_indices:
             if sim_scores[idx] > 0.0:  # Filter out products with a similarity score of 0.0
                 recommendations.append({
-                    '_id': data.iloc[idx]['_id'],
                     'productName': data.iloc[idx]['productName'],
                     'productDesc': data.iloc[idx]['productDesc'],
                     'price': data.iloc[idx]['price'],
                     'productImageURL': data.iloc[idx]['productImageURL'],
+                    '_id': data.iloc[idx]['_id'],  # Include the product ID
                     'similarity_score': sim_scores[idx]
                 })
         return recommendations
 
-    # Streamlit app styling
+    # Streamlit app
     st.markdown("""
         <style>
         .stApp {
@@ -86,11 +86,16 @@ if data is not None:
         .stTextInput label {
             color: #ff69b4; /* Pink color for label */
         }
-        .stImage img {
-            max-width: 200px; /* Smaller image size */
+        .stTextInput div > div > label {
+            color: #FFFF00; /* Yellow color for specific label */
+            font-size: 1em; /* Font size for label */
+        }
+        .stImage {
             display: block;
             margin-left: auto;
             margin-right: auto;
+            max-width: 150px; /* Make images smaller */
+            max-height: 150px;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -100,29 +105,22 @@ if data is not None:
     # User input
     user_description = st.text_area("Enter a product description:")
 
-    if st.button('Get Recommendations'):
-        if user_description:
-            recommendations = recommend_products(user_description)
+    if st.button('Visit Our Website'):
+        st.markdown('[Click here to visit our website](https://shop-nest-olive.vercel.app/)', unsafe_allow_html=True)
 
-            if recommendations:
-                st.write(f"**Recommended Products:**")
-                for rec in recommendations[:5]:  # Show top 5 recommendations
-                    st.write(f"**Product ID:** {rec['_id']}")
-                    st.write(f"**Product Name:** {rec['productName']}")
-                    st.write(f"**Description:** {rec['productDesc']}")
-                    st.write(f"**Price:** ${rec['price']}")
-                    st.image(rec['productImageURL'], use_column_width=False)  # Use smaller image size
-                    st.write(f"**Similarity Score:** {rec['similarity_score']:.2f}")
-                    st.write("---")
-                st.write("You can search products with these IDs.")
-            else:
-                st.write("No recommendations found.")
+    if user_description:
+        recommendations = recommend_products(user_description)
 
-    # Button to visit the external site
-    st.markdown("""
-        <a href="https://shop-nest-olive.vercel.app/" target="_blank">
-            <button style="background-color: #ff69b4; color: #000; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
-                Visit Our Website
-            </button>
-        </a>
-    """, unsafe_allow_html=True)
+        if recommendations:
+            st.write(f"**Recommended Products:**")
+            for rec in recommendations[:5]:  # Show top 5 recommendations
+                st.write(f"**Product ID:** {rec['_id']}")
+                st.write(f"**Product Name:** {rec['productName']}")
+                st.write(f"**Description:** {rec['productDesc']}")
+                st.write(f"**Price:** ${rec['price']}")
+                st.image(rec['productImageURL'], use_column_width=False)  # Adjust image size
+                st.write(f"**Similarity Score:** {rec['similarity_score']:.2f}")
+                st.write(f"You can search products with this ID.")
+                st.write("---")
+        else:
+            st.write("No recommendations found.")
