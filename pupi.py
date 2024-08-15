@@ -87,7 +87,9 @@ if data is not None:
             color: #ff69b4; /* Pink color for label */
         }
         .stImage img {
-            max-width: 200px; /* Smaller image size */
+            width: 150px; /* Fixed image width */
+            height: 150px; /* Fixed image height */
+            object-fit: cover; /* Ensure images are cropped and fit the dimensions */
             display: block;
             margin-left: auto;
             margin-right: auto;
@@ -111,7 +113,7 @@ if data is not None:
                     st.write(f"**Product Name:** {rec['productName']}")
                     st.write(f"**Description:** {rec['productDesc']}")
                     st.write(f"**Price:** ${rec['price']}")
-                    st.image(rec['productImageURL'], use_column_width=False)  # Use smaller image size
+                    st.image(rec['productImageURL'])  # Use fixed image size
                     st.write(f"**Similarity Score:** {rec['similarity_score']:.2f}")
                     st.write("---")
                 st.write("You can search products with these IDs.")
