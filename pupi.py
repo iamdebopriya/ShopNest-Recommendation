@@ -116,7 +116,7 @@ if data is not None:
                     st.write(f"**Product ID:** {rec['_id']}")
                     st.write(f"**Product Name:** {rec['productName']}")
                     st.write(f"**Description:** {rec['productDesc']}")
-                    st.write(f"**Price:** Rs.{rec['price']}")
+                    st.write(f"**Price:** {rec['price']}")
                     st.image(rec['productImageURL'])  # Use fixed image size
                     st.write(f"**Similarity Score:** {rec['similarity_score']:.2f}")
                     st.write("---")
