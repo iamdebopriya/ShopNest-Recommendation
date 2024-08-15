@@ -84,10 +84,10 @@ if data is not None:
             background-color: #ff1493; /* Darker pink on hover */
         }
         .stTextInput label {
-            color: #FFFF00; /* Yellow color for label */
+            color: #ff69b4; /* Pink color for label */
         }
         .stImage img {
-            max-width: 150px; /* Smaller image size */
+            max-width: 200px; /* Smaller image size */
             display: block;
             margin-left: auto;
             margin-right: auto;
