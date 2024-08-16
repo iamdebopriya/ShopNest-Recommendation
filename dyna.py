@@ -8,7 +8,6 @@ from PIL import Image
 import requests
 from io import BytesIO
 import numpy as np
-import random
 
 # Load and cache the dataset
 @st.cache_data
@@ -39,6 +38,7 @@ def get_random_products(n=5):
 
 # Helper function for visual search with uploaded image
 def classify_uploaded_image(uploaded_img):
+    fashion_terms = ['dress', 'outfit', 'jewelry', 'shoes']
     try:
         # Preprocess the uploaded image
         img = Image.open(uploaded_img).convert('RGB')
@@ -50,9 +50,15 @@ def classify_uploaded_image(uploaded_img):
         # Predict the class of the image
         preds = resnet_model.predict(img_array)
         decoded_preds = decode_predictions(preds, top=5)[0]  # Get top 5 predictions
-        return decoded_preds[:3]  # Return only top 3 predictions
+
+        # Extract top class names
+        top_class_names = [class_name for (_, class_name, _) in decoded_preds]
+        
+        # Find the fashion-related terms in predictions
+        matched_terms = [term for term in fashion_terms if term in top_class_names]
+        return decoded_preds[:3], matched_terms  # Return only top 3 predictions and matched terms
     except Exception as e:
-        return str(e)
+        return str(e), []
 
 # Styling
 st.markdown("""
@@ -146,7 +152,7 @@ uploaded_image = st.file_uploader("Upload an Image for Classification", type=['j
 if st.button('Classify Image'):
     if uploaded_image:
         st.markdown('<h3 class="stTitle">Uploaded Image Classification</h3>', unsafe_allow_html=True)
-        preds = classify_uploaded_image(uploaded_image)
+        preds, matched_terms = classify_uploaded_image(uploaded_image)
 
         if isinstance(preds, str):
             st.write(preds)
@@ -155,6 +161,14 @@ if st.button('Classify Image'):
             st.write("Top 3 classifications:")
             for i, (class_id, class_name, score) in enumerate(preds):
                 st.write(f"{i + 1}. **{class_name}** ({score:.2f})")
+
+            # Show top 5 fashion-related terms
+            st.markdown('<h3 class="stTitle">Top Fashion-Related Terms</h3>', unsafe_allow_html=True)
+            if matched_terms:
+                for term in matched_terms:
+                    st.write(f"**{term.capitalize()}**")
+            else:
+                st.write("No fashion-related terms matched.")
 
             # Show random products
             st.markdown('<h3 class="stTitle">Best Product Suggestions</h3>', unsafe_allow_html=True)
@@ -178,8 +192,6 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('<h2 class="stTitle">Visit Our Website</h2>', unsafe_allow_html=True)
 st.markdown("""
     <a href="https://shop-nest-olive.vercel.app/" target="_blank">
-        <button style="background-color: #ff69b4; color: #000; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
-            Visit Our Website
-        </button>
+        <button style="background-color: #ff69b4; color: #000; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Visit Our Website</button>
     </a>
 """, unsafe_allow_html=True)
