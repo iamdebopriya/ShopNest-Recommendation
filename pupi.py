@@ -1,134 +1,186 @@
+
 import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
+from sklearn.metrics.pairwise import cosine_similarity
+from tensorflow.keras.preprocessing import image as keras_image
+from tensorflow.keras.applications.resnet50 import ResNet50, preprocess_input, decode_predictions
+from PIL import Image
+import requests
+from io import BytesIO
+import numpy as np
+import random
 
-# Load the dataset
+# Load and cache the dataset
 @st.cache_data
 def load_data():
-    try:
-        data = pd.read_csv('productswithid.csv', on_bad_lines='skip', delimiter=',', engine='python')
-        return data
-    except pd.errors.ParserError as e:
-        st.error(f"Error parsing the CSV file: {e}")
-    except FileNotFoundError as e:
-        st.error(f"File not found: {e}")
-    except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
+    df = pd.read_csv('productsall.csv')  # Assumes _id and orders columns are in the CSV
+    return df
 
-# Load data
+# Load the dataset
 data = load_data()
 
-# If data is loaded successfully
-if data is not None:
-    # Combine product name and description into a single column
-    data['combined'] = data['productName'] + ' ' + data['productDesc']
+# Load pre-trained ResNet model for image classification
+resnet_model = ResNet50(weights='imagenet')
 
-    # Create a TF-IDF Vectorizer and fit it to the combined text
-    vectorizer = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform(data['combined'])
+# Initialize TF-IDF vectorizer and fit on product descriptions
+tfidf_vectorizer = TfidfVectorizer(stop_words='english')
+tfidf_matrix = tfidf_vectorizer.fit_transform(data['productDesc'])
 
-    # Calculate cosine similarity matrix
-    cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
+# Helper function for recommendations
+def recommend_products(query, top_n=5):
+    query_vector = tfidf_vectorizer.transform([query])
+    similarity_scores = cosine_similarity(query_vector, tfidf_matrix).flatten()
+    top_indices = similarity_scores.argsort()[-top_n:][::-1]
+    return data.iloc[top_indices], similarity_scores[top_indices]
 
-    # Function to recommend products based on the description
-    def recommend_products(description, cosine_sim=cosine_sim):
-        # Combine user input with a placeholder product name
-        input_text = "Query Product " + description
-        input_vec = vectorizer.transform([input_text])
-        sim_scores = linear_kernel(input_vec, tfidf_matrix).flatten()
+# Helper function to get random products
+def get_random_products(n=5):
+    return data.sample(n=n)
 
-        # Get indices of the most similar products
-        sim_indices = sim_scores.argsort()[::-1]
-        recommendations = []
-        for idx in sim_indices:
-            if sim_scores[idx] > 0.0:  # Filter out products with a similarity score of 0.0
-                recommendations.append({
-                    '_id': data.iloc[idx]['_id'],
-                    'productName': data.iloc[idx]['productName'],
-                    'productDesc': data.iloc[idx]['productDesc'],
-                    'price': data.iloc[idx]['price'],
-                    'productImageURL': data.iloc[idx]['productImageURL'],
-                    'similarity_score': sim_scores[idx]
-                })
-        return recommendations
+# Helper function for visual search with uploaded image
+def classify_uploaded_image(uploaded_img):
+    try:
+        # Preprocess the uploaded image
+        img = Image.open(uploaded_img).convert('RGB')
+        img = img.resize((224, 224))
+        img_array = keras_image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array = preprocess_input(img_array)
 
-    # Streamlit app styling
-    st.markdown("""
-        <style>
-        .stApp {
-            background-color: #000000; /* Black background */
-            color: #ff69b4; /* Pink text color */
-            font-family: 'Arial', sans-serif; /* Font style */
-        }
-        .stTitle {
-            color: #ff69b4; /* Pink title color */
-            font-family: 'Arial', sans-serif; /* Font style */
-            font-size: 2em; /* Title size */
-            font-weight: bold; /* Title weight */
-        }
-        .stTextArea textarea {
-            background-color: #000000; /* Black background for textarea */
-            color: #ff69b4; /* Pink text color for textarea */
-            border: 1px solid #808080; /* Grey border */
-        }
-        .stTextArea textarea:focus {
-            border-color: #ff69b4; /* Pink border on focus */
-            box-shadow: 0 0 0 1px #ff69b4; /* Pink outline on focus */
-        }
-        .stButton > button {
-            background-color: #ff69b4; /* Pink button background color */
-            color: #000; /* Black button text color */
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .stButton > button:hover {
-            background-color: #ff1493; /* Darker pink on hover */
-        }
-        .stTextInput label {
-            color: #ff69b4; /* Pink color for label */
-        }
-        .stImage img {
-            width: 150px; /* Fixed image width */
-            height: 150px; /* Fixed image height */
-            object-fit: cover; /* Ensure images are cropped and fit the dimensions */
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+        # Predict the class of the image
+        preds = resnet_model.predict(img_array)
+        decoded_preds = decode_predictions(preds, top=5)[0]  # Get top 5 predictions
+        return decoded_preds[:3]  # Return only top 3 predictions
+    except Exception as e:
+        return str(e)
 
-    st.markdown('<h1 class="stTitle">Product Recommendation System</h1>', unsafe_allow_html=True)
+# Styling
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #000000; /* Black background */
+        color: #ff69b4; /* Pink text color */
+        font-family: 'Arial', sans-serif; /* Font style */
+    }
+    .stTitle {
+        color: #ff69b4; /* Pink title color */
+        font-family: 'Arial', sans-serif; /* Font style */
+        font-size: 1.5em; /* Slightly smaller title size */
+        font-weight: bold; /* Title weight */
+        margin-bottom: 1.5rem; /* Space below title */
+    }
+    .stTextArea textarea, .stTextInput input {
+        background-color: #000000; /* Black background for textarea and input */
+        color: #ff69b4; /* Pink text color for textarea and input */
+        border: 1px solid #ff69b4; /* Pink border */
+    }
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: #ff69b4; /* Pink border on focus */
+        box-shadow: 0 0 0 1px #ff69b4; /* Pink outline on focus */
+    }
+    .stButton > button {
+        background-color: #ff69b4; /* Pink button background color */
+        color: #000; /* Black button text color */
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .stButton > button:hover {
+        background-color: #ff1493; /* Darker pink on hover */
+    }
+    .stImage img {
+        width: 150px; /* Fixed image width */
+        height: 150px; /* Fixed image height */
+        object-fit: cover; /* Ensure images are cropped and fit the dimensions */
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .section {
+        padding: 2rem; /* Padding inside each section */
+        margin-bottom: 2rem; /* Margin between sections */
+        background-color: #1e1e1e; /* Dark background for sections */
+        border-radius: 8px; /* Rounded corners for sections */
+    }
+    .stFileUploader > div {
+        background-color: #ff69b4; /* Pink background for file uploader */
+        border: 1px solid #ff69b4; /* Pink border */
+        color: #000; /* Black text color */
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-    # User input
-    user_description = st.text_area("Enter a product description:")
+# Title
+st.markdown('<h1 class="stTitle">Fashion Product Catalog</h1>', unsafe_allow_html=True)
 
-    if st.button('Get Recommendations'):
-        if user_description:
-            recommendations = recommend_products(user_description)
-
-            if recommendations:
-                st.write(f"**Recommended Products:**")
-                for rec in recommendations[:5]:  # Show top 5 recommendations
-                    st.write(f"**Product ID:** {rec['_id']}")
-                    st.write(f"**Product Name:** {rec['productName']}")
-                    st.write(f"**Description:** {rec['productDesc']}")
-                    st.write(f"**Price:** {rec['price']}")
-                    st.image(rec['productImageURL'])  # Use fixed image size
-                    st.write(f"**Similarity Score:** {rec['similarity_score']:.2f}")
-                    st.write("---")
-                st.write("You can search products with these IDs.")
+# Recommendations Section
+st.markdown('<div class="section">', unsafe_allow_html=True)
+st.markdown('<h2 class="stTitle">Get Recommendations by Description and Name</h2>', unsafe_allow_html=True)
+user_input = st.text_area("Enter a product description or name:")
+if st.button('Get Recommendations'):
+    if user_input:
+        recommendations, scores = recommend_products(user_input)
+        st.markdown('<h3 class="stTitle">Recommended Products</h3>', unsafe_allow_html=True)
+        for index, (row, score) in enumerate(zip(recommendations.iterrows(), scores)):
+            row = row[1]
+            st.write(f"**Product ID:** {row['_id']}")
+            st.write(f"**Product Name:** {row['productName']}")
+            st.write(f"**Description:** {row['productDesc']}")
+            st.write(f"**Price:** ${row['price']:.2f}")
+            st.write(f"**Similarity Score:** {score:.2f}")
+            if pd.notna(row['productImageURL']):
+                response = requests.get(row['productImageURL'])
+                img = Image.open(BytesIO(response.content))
+                st.image(img, caption=row['productName'], use_column_width=True)
             else:
-                st.write("No recommendations found.")
+                st.write("No image available.")
+    else:
+        st.write("Please enter a description or name to get recommendations.")
+st.markdown('</div>', unsafe_allow_html=True)
 
-    # Button to visit the external site
-    st.markdown("""
-        <a href="https://shop-nest-olive.vercel.app/" target="_blank">
-            <button style="background-color: #ff69b4; color: #000; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
-                Visit Our Website
-            </button>
-        </a>
-    """, unsafe_allow_html=True)
+# Classification Section
+st.markdown('<div class="section">', unsafe_allow_html=True)
+st.markdown('<h2 class="stTitle">Upload Image for Classification and Suggestions</h2>', unsafe_allow_html=True)
+uploaded_image = st.file_uploader("Upload an Image for Classification", type=['jpg', 'png', 'jpeg'])
+if st.button('Classify Image'):
+    if uploaded_image:
+        st.markdown('<h3 class="stTitle">Uploaded Image Classification</h3>', unsafe_allow_html=True)
+        preds = classify_uploaded_image(uploaded_image)
+
+        if isinstance(preds, str):
+            st.write(preds)
+        else:
+            st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+            st.write("Top 3 classifications:")
+            for i, (class_id, class_name, score) in enumerate(preds):
+                st.write(f"{i + 1}. **{class_name}** ({score:.2f})")
+
+            # Show random products
+            st.markdown('<h3 class="stTitle">Best Product Suggestions</h3>', unsafe_allow_html=True)
+            random_products = get_random_products(n=5)
+            for index, row in random_products.iterrows():
+                st.write(f"**Product ID:** {row['_id']}")
+                st.write(f"**Product Name:** {row['productName']}")
+                st.write(f"**Description:** {row['productDesc']}")
+                st.write(f"**Price:** ${row['price']:.2f}")
+                if pd.notna(row['productImageURL']):
+                    response = requests.get(row['productImageURL'])
+                    img = Image.open(BytesIO(response.content))
+                    st.image(img, caption=row['productName'], use_column_width=True)
+                else:
+                    st.write("No image available.")
+    else:
+        st.write("Please upload an image to classify.")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Visit our website button at the bottom
+st.markdown('<h2 class="stTitle">Visit Our Website</h2>', unsafe_allow_html=True)
+st.markdown("""
+    <a href="https://shop-nest-olive.vercel.app/" target="_blank">
+        <button style="background-color: #ff69b4; color: #000; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            Visit Our Website
+        </button>
+    </a>
+""", unsafe_allow_html=True)
